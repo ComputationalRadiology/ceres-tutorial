@@ -73,8 +73,7 @@ ENV GIT_HTTP_MAX_REQUEST_BUFFER 100M
 #ENTRYPOINT ["/bin/sh", "-c", "bash"]
 
 # DEFAULT CMD provides a list of binaries.
-ENV msg "\nList of available binaries in /usr/src/moco\n"
-CMD echo $msg; find /usr/src/moco/ -type f -name "crl*"; echo $msg
+CMD . /app/venv/bin/activate && cd /opt/src && python3 pdate.py -h
 
 # Assume user data volume to be mounted at /data
 #   docker run --volume=/path/to/data:/data
@@ -101,7 +100,7 @@ WORKDIR /app
 RUN . /app/venv/bin/activate && pip3 install SimpleITK
 
 # Now run the program
-RUN . /app/venv/bin/activate && cd /opt/src && python3 pdate.py
+RUN . /app/venv/bin/activate && cd /opt/src && python3 pdate.py -h
 
 
 # Ceres Solver 2.2 requires a fully C++17-compliant compiler
@@ -119,9 +118,9 @@ RUN . /app/venv/bin/activate && cd /opt/src && python3 pdate.py
 
 # Build for ubuntu
 # Use network=host option to provide proxy for apt and pip3
-# DOCKER_BUILDKIT=1 docker build --progress=plain --network=host -t crl/ceres:latest -f Dockerfile .
+# DOCKER_BUILDKIT=1 docker build --progress=plain --network=host -t crl/ceres-tutorial:latest -f Dockerfile .
 
 # Run the container to get a shell:
-# docker run -it --rm --entrypoint bash crl/ceres
+# docker run -it --rm --entrypoint bash crl/ceres-tutorial
 #
 
