@@ -55,8 +55,6 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
 	cython3 cython-doc \
 	python3-nibabel
 
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y python3-matplotlib
-
 
 # RUN rm -rf /var/lib/apt/lists/*
 
@@ -87,6 +85,54 @@ RUN ls /opt/src/nls_solver
 RUN ls /opt/src/nls_solver/build
 RUN echo ${LD_LIBRARY_PATH}
 
+# Sometimes git clone can fail due to a lack of buffer space.
+# This fixes that problem.
+ENV export GIT_HTTP_MAX_REQUEST_BUFFER=100M
+
+# ITK v5.3 does not compile with g++-13
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        g++-12
+
+RUN update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 12
+RUN update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 13
+RUN update-alternatives --set g++ /usr/bin/g++-12
+
+
+RUN mkdir -p /opt/src/itksrc && cd /opt/src/itksrc && \
+    git clone -b v5.3.0 https://github.com/InsightSoftwareConsortium/ITK ITK \
+    && mkdir -p /opt/src/itksrc/itk-build
+
+RUN cd /opt/src/itksrc/itk-build && \
+    cmake -DCMAKE_INSTALL_PREFIX=/opt/itk \
+        -DCMAKE_INSTALL_RPATH=${CMAKE_INSTALL_PREFIX}/lib \
+        -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE \
+        -DBUILD_EXAMPLES:BOOL=OFF \
+        -DBUILD_TESTING:BOOL=OFF \
+        -DBUILD_SHARED_LIBS:BOOL=ON \
+        -DCMAKE_BUILD_TYPE:STRING=Release \
+        -DCMAKE_CXX_FLAGS:STRING="-O2 -DNDEBUG -Wno-array-bounds" \
+        -DCMAKE_CXX_FLAGS_RELEASE:STRING="-O3 -DNDEBUG -Wno-array-bounds" \
+        /opt/src/itksrc/ITK && \
+        make -j 1 && make install && \
+        cd /opt/src && \
+        rm -rf /opt/src/itksrc
+
+# RUN mkdir -p /opt/src/quillsrc && cd /opt/src/quillsrc && git clone https://github.com/odygrd/quill.git && \
+#    mkdir -p /opt/src/quillsrc/cmake_build && cd /opt/src/quillsrc/cmake_build && \
+#    ls /opt/src/quillsrc && cmake /opt/src/quillsrc/quill && make install
+
+RUN mkdir -p /opt/src/quillsrc
+COPY quill /opt/src/quillsrc/quill
+RUN cd /opt/src/quillsrc && \
+   mkdir -p /opt/src/quillsrc/cmake_build && cd /opt/src/quillsrc/cmake_build && \
+   ls /opt/src/quillsrc && cmake /opt/src/quillsrc/quill && make install
+
+RUN mkdir -p /opt/src/intensityScaling
+COPY intensityScaling /opt/src/intensityScaling
+RUN cd /opt/src/intensityScaling && mkdir build && cd build && cmake .. && make
+ENV LD_LIBRARY_PATH ${LD_LIBRARY_PATH}:/opt/src/intensityScaling/build
+RUN ls /opt/src/intensityScaling/build
+
 # Now create the cython integration:
 RUN ls /opt/src
 COPY nls_solver.pxd /opt/src
@@ -95,12 +141,23 @@ COPY pdate.py /opt/src
 COPY setup.py /opt/src
 RUN cd /opt/src/ && python3 setup.py build_ext --inplace
 
+# Now create the cython integration:
+RUN ls /opt/src
+COPY intensityScaling.pxd /opt/src
+COPY intensityScaling.pyx /opt/src
+COPY intensityScaling.py /opt/src
+COPY intensityScaling-setup.py /opt/src
+RUN cd /opt/src/ && python3 intensityScaling-setup.py build_ext --inplace
+
 RUN python3 -m venv --system-site-packages /app/venv
 WORKDIR /app
 RUN . /app/venv/bin/activate && pip3 install SimpleITK
 
 # Now run the program
 RUN . /app/venv/bin/activate && cd /opt/src && python3 pdate.py -h
+
+# Now run the second program
+RUN . /app/venv/bin/activate && cd /opt/src && python3 intensityScaling.py -h
 
 
 # Ceres Solver 2.2 requires a fully C++17-compliant compiler
