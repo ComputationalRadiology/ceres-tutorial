@@ -4,4 +4,3 @@ library from Google called ceres. More information about Ceres is available here
 
 This code builds a container from Ubuntu 24.04, and exercises the Ceres
 solver through a Cython interface to python 3.12.
-
